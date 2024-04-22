@@ -1,0 +1,52 @@
+name: Locale Workflow
+
+on: push
+
+permissions:
+  contents: write        # Grants permission to write to the repository
+  pull-requests: write   # Grants permission to manage pull requests
+
+
+jobs:
+  create-branch-and-pr-on-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Necessary to ensure history is available for branch operations
+
+      - name: Setup GitHub CLI
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      - name: Get the last commit message
+        id: get-commit-message
+        run: echo "message=$(git log -1 --pretty=format:%s)" >> $GITHUB_ENV
+      
+      - name: Check if branch already exists
+        id: check_branch
+        run: |
+          BRANCH_NAME="lingoport-translations-$(date +%Y-%m-%d)"
+          EXISTS=$(git ls-remote --heads origin $BRANCH_NAME | wc -l)
+          echo "branch_exists=$EXISTS" >> $GITHUB_ENV
+          echo " Is Branch exists : $EXISTS"
+
+      - name: Create new branch and push if commit message matches
+        id: create_branch
+        if: env.branch_exists != '0' && env.message == 'Localyzer Git S3 Integration'
+        run: |
+          NEW_BRANCH="lingoport-translations-$(date +%Y-%m-%d)"
+          git checkout lingo-test
+          git checkout -b $NEW_BRANCH
+          git push origin $NEW_BRANCH
+          echo "branch_name=$NEW_BRANCH" >> $GITHUB_ENV
+          echo "New branch created: $NEW_BRANCH"
+
+      - name: Create Pull Request
+        if: env.branch_name
+        run: |
+          gh pr create --title "Review new locale updates" \
+                       --body "Please review the changes in this new branch: ${{ env.branch_name }}" \
+                       --base main \
+                       --head ${{ env.branch_name }}
